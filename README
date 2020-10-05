@@ -1,0 +1,4 @@
+This is the repository mainly for the Cholesky factorization under the SKP representation. This repo also includes the code for comparing with using the hierarchical matrices in terms of memory footprint and factorization time. The dependencies of `Eigen' and `libMorton' are included in this git repo. However, there are two other dependencies that users need to configure:
+	1. the Intel MKL library
+	2. the Hlibpro library
+The configuration means specifying the ROOT directory and the link line options. Depending on the compiler chosen, users also need to specify the flags of OpenMP for multithreading.
