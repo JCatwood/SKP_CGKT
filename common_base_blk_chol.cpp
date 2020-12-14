@@ -3,6 +3,7 @@
 #include <iomanip>
 #include "mkl.h"
 #include "factor_SVD.h"
+#include "common_base_blk_chol.h"
 
 #define OVERSAMPLE 20
 #define RETROSIZE 1

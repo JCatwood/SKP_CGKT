@@ -1,7 +1,7 @@
 #include <iostream>
 #include <chrono>
 #include <fstream>
-#include "hlibpro-2.7.2/include/hlib.hh"
+#include "hlib.hh"
 #include "generate_mat.h"
 #include "utility.h"
 #include "factor_SVD.h"
