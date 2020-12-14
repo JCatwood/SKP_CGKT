@@ -8,6 +8,7 @@
 #define RETROSIZE 1
 #define SETBACK 3
 
+//' Stores the coefficient matrix of V relative to Q
 class CoefVToQ
 {
 public:
@@ -57,6 +58,22 @@ int disc_new_base(double *array1, int ld1, bool transpose, int ncol,
 
 using namespace std;
 using namespace Eigen;
+
+//' The SKP Cholesky factorization with the correction machanism 
+//' Input:
+//'   @covM stores the SKP representation of the input covariance matrix. Its basis 
+//'     will be incremented for the Schur complements
+//'   @k2Max decides the number of columns to allocate for the SKP representation 
+//'     of L
+//'   @k3Max similar with @k2Max but for L inverse
+//'   @crt_k2Max the current max number of basis for L, which could be increased 
+//'      after correction
+//'   @crt_k3Max similar with @crt_k2Max but for L inverse
+//'   @incr_k1, @incr_k2, @incr_k3 the increments after correction for 
+//'      the max number of basis of @covM, @L, @Linv, respectively  
+//'   @epslRel, the tolerance for discovering new basis
+//'   @check, the Cholesky factor used for checking the relative error. 
+//'      Set to NULL if checking is not needed
 
 void cb_blk_chol_v2(KLR_mat &covM, KLR_mat &L, KLR_mat &Linv, std::vector<Eigen::
 	MatrixXd> &LDiag, int k2Max, int k3Max, int crt_k2Max, int crt_k3Max, 
@@ -108,7 +125,7 @@ void cb_blk_chol_v2(KLR_mat &covM, KLR_mat &L, KLR_mat &Linv, std::vector<Eigen:
 			printf("The %d argument in the Cholesky is invalid\n", -succ);
 			exit(1);
 		}
-		if(succ > 0)
+		if(succ > 0) // Implement the correction mechanism
 		{
 			if(i - SETBACK - RETROSIZE < firstColIdx)
 			{
@@ -186,6 +203,7 @@ void cb_blk_chol_v2(KLR_mat &covM, KLR_mat &L, KLR_mat &Linv, std::vector<Eigen:
 	} // i = 0:dimU
 }
 
+// Generate a m-by-n Gaussian matrix for random sampling
 Eigen::MatrixXd gaussianMat(int m, int n) 
 {
 	MatrixXd A(m, n); 
@@ -198,10 +216,13 @@ Eigen::MatrixXd gaussianMat(int m, int n)
 }
 
 /*
-	The columns of C starting from offset stores the coordinates of the new 
-	When C.ncol meets offset, not stop but issue a warning
-	work should be of dimension at least C.nrow
-	2019/09/18
+	Projects new coordinate vectors onto existing basis vectors, both are 
+	  stored in @C
+	The columns of @C starting from @offset stores the coordinates 
+	  to be projected 
+	@ncolNew the number of coordinate vectors to be projected
+	@epslRel the tolerance used for finding new basis
+	@work a temporary working space, should be of dimension at least C.nrow
 */
 int update_C_MGS(CoefVToQ &C, int offset, int ncolNew, double &epslRel, double *work,
 	int lwork)
@@ -240,6 +261,12 @@ int update_C_MGS(CoefVToQ &C, int offset, int ncolNew, double &epslRel, double *
 	return C.ncol - ncolCPrev;
 }
 
+/*
+	Update the Q, R factors when new basis are added
+	@C1 @C2 stores the coordinates of the basis relative to B.Q
+	@numNewBaseC1 @numNewBaseC2 stores the number of new basis
+	The other inputs are temporary working spaces
+*/
 int update_QR_perm(const KLR_mat &C1, int numNewBaseC1, const KLR_mat &C2, int 
 	numNewBaseC2, QRFactMGS &B, Eigen::MatrixXd &workM, Eigen::RowVectorXd 
 	&workRowVec)
@@ -370,6 +397,12 @@ int update_QR_perm(const KLR_mat &C1, int numNewBaseC1, const KLR_mat &C2, int
 	return B.k - kPrev;
 }
 
+/*
+	Discovery new basis using a dense matrix
+	@vec stores the vectorized dense matrix
+	@M stores the SKP representation
+	@rowIdx specifies the diagonal position of the dense matrix in @M
+*/
 bool add_base_KLR_mat(KLR_mat &M, const VectorXd &vec, int rowIdx, double epsl)
 {
 	int k = M.num_term;
@@ -387,6 +420,10 @@ bool add_base_KLR_mat(KLR_mat &M, const VectorXd &vec, int rowIdx, double epsl)
 	return true;
 }
 
+/*
+	Project @vec onto existing basis of @M and store the projection
+	  coordinates in @coord
+*/
 bool add_base_KLR_mat(KLR_mat &M, const VectorXd &vec, double *coord, double epsl)
 {
 	int k = M.num_term;
@@ -424,6 +461,10 @@ void MGS(KLR_mat &M, Eigen::Map<Eigen::VectorXd> &vec, double *coord, int lcoord
 	}
 }
 
+/*
+	Add @nrowNew rows of zero to the coefficient matrix @M
+	Used when a new basis is found
+*/
 void add_row_CoefVToQ(CoefVToQ &M, int nrowNew)
 {
 	if(nrowNew <= 0)
@@ -435,14 +476,6 @@ void add_row_CoefVToQ(CoefVToQ &M, int nrowNew)
 
 /*
 	Find new bases from the column mixture
-	First MGS routine to the new mixed columns so that they are orthogonal to 
-		the existing bases
-	Then apply SVD to the orthogonalized columns
-	Associate each column in U with an singular value and truncate based on the 
-		tolerance and the maximum number of terms allowed
-	2019/12/04
-	Add another input parameter max_rk
-	2019/12/05
 */
 int update_C_SVD(CoefVToQ &C, int offset, int max_rk, int ncolNew, double &epsl, 
 	double *work, int lwork)
@@ -494,7 +527,6 @@ int update_C_SVD(CoefVToQ &C, int offset, int max_rk, int ncolNew, double &epsl,
 	array2 stores array1's projection on Q
 	array3 stores the dense block used for Cholesky
 	returns the diagonal block before Cholesky
-	2019/12/04
 */
 void diag_blk(int i, const KLR_mat &covM, const KLR_mat &L, const QRFactMGS &B22T, 
 	double *array1, double *array2, double *array3, int dimU, int dimV, 
@@ -538,7 +570,6 @@ void diag_blk(int i, const KLR_mat &covM, const KLR_mat &L, const QRFactMGS &B22
 		relative to B
 	columns of array1 stores the Schur coefficients
 	if(inCorrection) add the RETROSIZE columns before the column firstColIdx
-	2019/12/05
 */
 void Schur_coef(int i, const KLR_mat &covM, const KLR_mat &L, double *array1, int ld1,
 	int dimU, int firstColIdx, int k2, bool inCorrection)
@@ -580,7 +611,6 @@ void Schur_coef(int i, const KLR_mat &covM, const KLR_mat &L, double *array1, in
 		isConj = T => QR = klrM1 * klrM1^T
 		else => QR = klrM1 * klrM2^T
 	Add new rows to C2
-	2019/12/05
 */
 void new_base_routine(const QRFactMGS &B1, QRFactMGS &B2, const CoefVToQ &C1, 
 	KLR_mat &klrM1, CoefVToQ &C2, int nBaseNew, bool isConj, int dimV, 
@@ -609,7 +639,6 @@ void new_base_routine(const QRFactMGS &B1, QRFactMGS &B2, const CoefVToQ &C1,
 	array1 stores the original coefficients relative to B
 	array2 stores the projection of array1 onto Q
 	array3 stores the coefficients relative to the updated C
-	2019/12/05
 */
 int disc_new_base(double *array1, int ld1, bool transpose, int ncol, 
 	double *array2, int ld2, double *array3, int ld3, const QRFactMGS &B, 

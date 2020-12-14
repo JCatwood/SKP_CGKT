@@ -21,6 +21,10 @@ void klrM_vec_mult(const KLR_mat &klrM, int n, const double *x, double *y,
 	double *work, int lwork);
 void gaussian_vec(double *x, int n);
 
+/*
+	The simulation for comparing the times and relative errors of the
+	  SVD framework and the ACA framework
+*/
 void cmp_svd_aca_fm(int s1, int s2)
 {
 	MatrixXd geom(s1*s2, 2);
@@ -64,57 +68,9 @@ void cmp_svd_aca_fm(int s1, int s2)
 	cout << errACA << " " << nodeACA.num_term << " " << timeACA << endl;
 }
 
-void aca_fm(int s1, int s2)
-{
-	MatrixXd geom(s1*s2, 2);
-	double unit = 1.0 / (double) s2;
-	for(int i = 0; i < s1*s2; i++)
-	{
-		geom(i, 0) = (i / s2) * unit;
-		geom(i, 1) = (i % s2) * unit;
-	}
-
-	auto kernel = exp_cov_func(0.3);
-
-	VectorXi idx(s1*s2);
-	iota(idx.data(), idx.data()+s1*s2, 0);
-
-	TimeStamp start, end;
-	double timeACA;
-
-	function<double(int, int)> kernelWrap = [&geom, &kernel, &idx](int i, int j){
-		return kernel((geom.row(i) - geom.row(j)).norm());};
-	start = std::chrono::steady_clock::now();
-	TreeNode nodeACA = comp_UV_ACA(kernelWrap, 0, 0, s1*s2, s2, s2, 3e-5, 0, 
-		true);
-	end = std::chrono::steady_clock::now();
-        timeACA = std::chrono::duration<double> (end-start).count();
-
-	double covMNorm = 0.0;
-	double diffNorm = 0.0;
-	for(int i = 0; i < s1*s2; i++)
-		for(int j = 0; j < s1*s2; j++)
-		{
-			double cij = kernelWrap(i, j);
-			covMNorm += cij * cij;
-			int iU = i / s2;
-			int jU = j / s2;
-			int rowidxU = jU*s1 + iU;
-			int iV = i % s2;
-			int jV = j % s2;
-			int rowidxV = jV*s2 + iV;
-			double diffij = cij - nodeACA.U.row(rowidxU).dot(
-				nodeACA.V.row(rowidxV));
-			diffNorm += diffij * diffij;
-		}
-	covMNorm = sqrt(covMNorm);
-	diffNorm = sqrt(diffNorm);
-
-	double errACA = diffNorm / covMNorm;
-	cout << covMNorm << " " << diffNorm << endl;
-	cout << errACA << " " << nodeACA.num_term << " " << timeACA << endl;
-}
-
+/*
+	The simulation on using different indexing methods and base block sizes
+*/
 void cmp_idx_blk_sz(int kernelType, int s1, int s2, int odrType)
 {
 	MatrixXd geom(s1*s2, 2);
@@ -175,47 +131,10 @@ void cmp_idx_blk_sz(int kernelType, int s1, int s2, int odrType)
 	delete[] singVal;
 }
 
-void kdecomp_mem(int kernelType, int s1, int s2)
-{
-	double beta1 = 0.1;
-	double beta2 = 0.3;
-	MatrixXd geom(s1*s2, 2);
-	double unit = 1.0 / (double) s2;
-	for(int i = 0; i < s1*s2; i++)
-	{
-		geom(i, 0) = (i / s2) * unit;
-		geom(i, 1) = (i % s2) * unit;
-	}
-
-	function<double(int, int)> kernelWrap;
-	if(kernelType == 1)
-	{
-		kernelWrap = [&geom, beta2](int i, int j){
-			return exp(- (geom.row(i) - geom.row(j)).norm() / beta2);};
-	}else
-	{
-		kernelWrap = [beta1, beta2, &geom](int i, int j){
-			double betaI = beta1 + (beta2 - beta1) * geom(i, 0);
-			double betaJ = beta1 + (beta2 - beta1) * geom(j, 0);
-			double dist = (geom.row(i) - geom.row(j)).squaredNorm();
-			dist = 2 * dist / (betaI * betaI + betaJ * betaJ);
-			dist = sqrt(dist);
-			double coef = 2 * betaI * betaJ / (betaI * betaI + 
-				betaJ * betaJ);
-			coef = sqrt(coef);
-			return coef * exp(-dist);
-		};
-	}
-
-	int m2 = s2;
-	if(m2 > sqrt(s1 * s2))
-		m2 /= 2;
-	TreeNode nodeACA = comp_UV_ACA(kernelWrap, 0, 0, s1*s2, m2, m2, 1e-5, 0, 
-		true);
-	cout << nodeACA.num_term << " " << nodeACA.num_term * (m2*m2 + 
-		((double) s1)*s2*s1*s2/m2/m2) * 8 << endl;
-}
-
+/*
+	The simulation on the relative error v.s. the number of Kronecker 
+	  factors in the SKP representation
+*/
 void relerr_nterm(int kernelType, int gridType)
 {
 	double beta1 = 0.1;
@@ -291,6 +210,10 @@ void relerr_nterm(int kernelType, int gridType)
 	delete[] normRel;
 }
 
+/*
+	The simulation testing the number of terms needed in the SKP 
+	  representation to reach a certain accuracy
+*/
 void nterm_for_precision(int s1, int s2)
 {
 	vector<double> precVec {0.1, 0.01, 1e-3, 1e-4, 1e-5};
@@ -336,11 +259,20 @@ void nterm_for_precision(int s1, int s2)
 }
 
 /*
-	Number of threads should be set outside
-	The correction numbers are set by the common-base block cholesky function
-	kernelType: 1 -> stationary exp 2 -> non-stationary exp
-	domainType: 1 -> fixed 2 -> expanding
-	2019/12/03
+	The simulation for timing the Cholesky factorization under the SKP
+	@m the 2D grid's dimension, also the dimension of the base blocks
+	@kernelType: 1 -> stationary exp 2 -> non-stationary exp
+	@domainType: 1 -> fixed 2 -> expanding
+	@k1, @k2, @k3 the max number of basis of covM, L, Linv, respectively 
+	@crt_k1, @crt_k2, @crt_k3 the current max number of basis of 
+	  covM, L, Linv, respectively 
+	@incr_k1, @incr_k2, @incr_k3 the increments after correction for 
+	  the max number of basis of covM, L, Linv, respectively 
+	@epslBuild, the tolerance for discovering new basis during building the
+	  SKP
+	@epslFactor, the tolerance for discovering new basis during factorization
+	@check, the Cholesky factor used for checking the relative error. 
+	  Set to NULL if checking is not needed
 */
 void cholesky_time(int m, int kernelType, int domainType, int k1, int k2, int k3,
 	int crt_k1, int crt_k2, int crt_k3, int incr_k1, int incr_k2, int incr_k3,
@@ -456,6 +388,20 @@ std::function<double(double)> Matern_kernel(double beta, double nu)
 		c * pow(h / beta, nu) * std::tr1::cyl_bessel_k(nu, h / beta);};
 }
 
+/*
+	Compute the empirical semivariogram by sampling. Input:
+          @geom n X 2, the locations of spatial variables
+          @y values of spatial variables
+          @distLB the lower bound of the distance when computing the empirical 
+            semivariogram
+          @binLen the length of each bin of distance
+          @nLen number of bins for the distance
+          @work temporary workspace
+          @lwork the size of work
+	Output:
+	  @u the distances 
+	  @v the computed empirical semivariogram
+*/
 void semivariog(const MatrixXd &geom, const VectorXd &y, double distLB, double 
 	binLen, int nbin, VectorXd &u, VectorXd &v, size_t *work, int lwork)
 {
@@ -509,11 +455,11 @@ void gaussian_vec(double *x, int n)
 }
 
 /*
-	(klr) matrix-vector multiplication
-	initial vector stored in x
-	matrix and vector dimensions are n
-	result stored in y
-	lwork should be no smaller than n
+	SKP matrix-vector multiplication
+	initial vector stored in @x
+	matrix and vector dimensions are @n
+	result stored in @y
+	lwork should be no smaller than @n
 */
 void klrM_vec_mult(const KLR_mat &klrM, int n, const double *x, double *y, 
 	double *work, int lwork)
@@ -542,6 +488,12 @@ void klrM_vec_mult(const KLR_mat &klrM, int n, const double *x, double *y,
 	}
 }
 
+/*
+	The simulation for generating GRF on the 2D plain
+	@m the dimension of the 2D grid
+	@kernelType 1: exponential kernel 2: Whittle kernel
+	@domainType 1: fixed 2: expanding
+*/
 void GRF_app(int m, int kernelType, int domainType, std::ofstream &file)
 {
 	int n = m * m;
@@ -662,85 +614,6 @@ void GRF_app(int m, int kernelType, int domainType, std::ofstream &file)
 	}
 	delete[] workInt;
 }
-
-void GRF_dense_test(int m, int kernelType, std::ofstream &file)
-{
-	int n = m * m;
-	int domainType = 1;
-	TimeStamp start, end;
-	double time_used;
-	// geometry
-	MatrixXd geom(n, 2);
-	double unit = 1.0 / (double) m;
-	for(int i = 0; i < n; i++)
-	{
-		geom(i, 0) = (i / m) * unit;
-		geom(i, 1) = (i % m) * unit;
-	}
-	// beta
-	double beta;
-	if(domainType == 1)
-	{
-		beta = 0.1;
-	}else
-	{
-		beta = 0.1 / double(m / 32);
-	}
-	// kernel visitor
-	function<double(double)> kernel;
-	if(kernelType == 1)
-        {
-                kernel = exp_cov_func(beta);
-        }else
-        {
-                kernel = Matern_kernel(beta, 1.0);
-        }
-	// Correlation matrix
-	VectorXi idx(n);
-	iota(idx.data(), idx.data() + n, 0);
-	MatrixXd covM = gen_dense_cov_mat(geom, kernel, idx);
-	// Cholesky
-	cholesky(covM);
-	// simulate GRF
-	VectorXd x(n);
-	VectorXd y(n);
-	VectorXd work(n);
-	int nbin = 20;
-	size_t *workInt = new size_t[nbin];
-	for(int l = 0; l < 100; l++)
-	{
-		start = std::chrono::steady_clock::now();
-		gaussian_vec(x.data(), n);
-		y.noalias() = covM * x;
-		end = std::chrono::steady_clock::now();
-		time_used = std::chrono::duration<double> (end-start).
-			count();
-		file << time_used << " ";
-		// output mean, variance, and semivariogram
-		double meanY = y.mean();
-		for_each(y.data(), y.data() + n, [meanY](double &y){y -= meanY;});
-		double varY = y.dot(y) / double(n);
-		double distLB = 0.0;
-		double binLen = 0.07;
-		VectorXd u(nbin);
-		VectorXd v(nbin);
-		start = std::chrono::steady_clock::now();
-		semivariog(geom, y, distLB, binLen, nbin, u, v, workInt, 
-			nbin);
-		end = std::chrono::steady_clock::now();
-		time_used = std::chrono::duration<double> (end-start).
-			count();
-		file << time_used << endl;
-		file << meanY << " " << varY << endl;
-		file << u.transpose() << endl;
-		file << v.transpose() << endl;
-		for_each(workInt, workInt + nbin, [&file](size_t &x)
-			{file << x << " ";});
-		file << endl;
-	}
-	delete[] workInt;
-}
-
 
 
 

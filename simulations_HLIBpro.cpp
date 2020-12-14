@@ -12,6 +12,9 @@ using namespace std;
 using namespace HLIB;
 using real_t = HLIB::real;
 
+/*
+	The non-stationary exponential kernel
+*/
 class NSExpCovf : public TCoeffFn<real_t> {
 private:
         const double beta1;
@@ -58,6 +61,10 @@ public:
         bool       is_complex     () const { return false; }
 };
 
+/*
+	The simulation function to find the memory footprint of the 
+	  hierarchical matrix
+*/
 void H_mem(int kernelType, int s1, int s2, double h)
 {
         try

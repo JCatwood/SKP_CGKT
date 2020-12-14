@@ -26,9 +26,12 @@ typedef std::chrono::time_point<std::chrono::steady_clock> TimeStamp;
 
 int main()
 {
+	// This is the top loop for the application study, e.g.,
+	//   simulating GRF with exp/Whittle kernels on fixed/expanding
+	//   domains
 	mkl_set_num_threads(8);
-	for(int covType = 1; covType < 2; covType++)
-		for(int domainType = 1; domainType < 2; domainType++)
+	for(int covType = 0; covType < 2; covType++)
+		for(int domainType = 0; domainType < 2; domainType++)
 		{
 			string domainName, covName;
 			if(domainType == 1)
@@ -47,6 +50,7 @@ int main()
 	return 0;
 }
 
+// Computes the Kronecker products, which was used for benchmarking
 MatrixXd kron_prod(const MatrixXd& mat1 , const MatrixXd& mat2)
 {
 	int num_row = mat1.rows() * mat2.rows();

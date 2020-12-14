@@ -11,10 +11,9 @@
 	U_i and V_i should be square
 	vec(U_i) and vec(V_i) are stored in U , V
 	U.cols = V.cols = max_num_term
-	The valid columns, however, are those before num_term
-	2019/07/09
-	Added a new member `crt_max_num_term`
-	2019/12/06
+	The valid columns are those before num_term
+	The member `crt_max_num_term` stores the current maximum number of columns
+	  (basis), which can be increased when the Cholesky factorization fails
 */
 class KLR_mat
 {
@@ -56,7 +55,6 @@ public:
         Use k to store the valid number of columns in Q or rows in R
         Use MGS to build Q and R is the coord
 	Add a permutation matrix member permuteM
-        2019/08/29
 */
 class QRFactMGS
 {
@@ -81,16 +79,6 @@ public:
                 Q = Eigen::MatrixXd::Zero(num_row , k_max);
                 R = Eigen::MatrixXd::Zero(k_max, k_max);
         }
-};
-
-/*
-        Exception when the dense Cholesky routine fails
-        2019/07/16
-*/
-class CholException : public std::exception {
-public:
-        int i;
-        int j;
 };
 
 void cb_blk_chol_v2(KLR_mat &covM, KLR_mat &L, KLR_mat &Linv, std::vector<Eigen::

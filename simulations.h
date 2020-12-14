@@ -4,9 +4,7 @@
 #include <fstream>
 #include "Dense"
 void cmp_svd_aca_fm(int s1, int s2);
-void aca_fm(int s1, int s2);
 void cmp_idx_blk_sz(int kernelType, int s1, int s2, int odrType);
-void kdecomp_mem(int kernelType, int s1, int s2);
 void relerr_nterm(int kernelType, int gridType);
 void nterm_for_precision(int s1, int s2);
 void cholesky_time(int m, int kernelType, int domainType, int k1, int k2, int k3,
@@ -17,5 +15,4 @@ void semivariog(const Eigen::MatrixXd &geom, const Eigen::VectorXd &y,
 	double distLB, double binLen, int nbin, Eigen::VectorXd &u, 
 	Eigen::VectorXd &v, int *work, int lwork);
 void GRF_app(int m, int kernelType, int domainType, std::ofstream &file);
-void GRF_dense_test(int m, int kernelType, std::ofstream &file);
 #endif 
